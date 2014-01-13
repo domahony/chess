@@ -236,6 +236,28 @@ function readmove()
 	
 }
 
+function applymove(movestatus)
+{
+	console.log(movestatus);
+	VALID_MOVES = movestatus.moves;
+	//make the move indicated
+	//clear the board
+	
+}
+
+function getmovestatus()
+{
+	$.get( "/getmovestatus", function( data ) {
+		
+		if (data.status == 'Complete') {
+			applymove(data);
+		} else {
+			setTimeout(getmovestatus, 5000);
+		}
+		
+	});
+}
+
 function makemove(move, r, svg) {
 	
 				return function() {
@@ -244,25 +266,12 @@ function makemove(move, r, svg) {
 					var piece = move.piece;
 					$.get( "/makemove/" + move.id, function( data ) {
 						
-						if (data.status == "Accepted") {
-							// deselect targets
-							// deselect selected
-							// apply transform to piece
+						if (data.status == "Pending") {
 							
 							var p = $("#" + move.piece, svg).get(0); 
 							
 							var transformList = p.transform.baseVal;
 							var t = transformList.consolidate();
-		  
-							/*
-							if (t == null) {
-								t = p.ownerSVGElement.createSVGTransform();
-							}
-		  
-		  					var transform = transformList.createSVGTransformFromMatrix(g.getCTM()
-				  				.translate((150 * x)/t.matrix.a,(-1 * 150 * y)/t.matrix.d));
-		  					console.log(transformList.numberOfItems);
-		  					*/
 		  
 							if (transformList.numberOfItems == 0) {
 								transformList.appendItem(move.transform);
@@ -280,11 +289,35 @@ function makemove(move, r, svg) {
 							console.log(p);
 							console.log(transformList);
 							console.log("<--------");
+	
+							setTimeout(getmovestatus, 5000);
 							
-							$.get( "/getmoves", function( data ) {
-								VALID_MOVES = data;
-								readmove();
-							});
+						} else if (data.status == "Accepted") {
+							// deselect targets
+							// deselect selected
+							// apply transform to piece
+							
+							var p = $("#" + move.piece, svg).get(0); 
+							
+							var transformList = p.transform.baseVal;
+							var t = transformList.consolidate();
+		  
+							if (transformList.numberOfItems == 0) {
+								transformList.appendItem(move.transform);
+							} else {
+								transformList.replaceItem(move.transform, 0);
+							}
+		  
+							//e.rect = calculateCell(x, -1 * y, e.rect);
+							
+							console.log("MOVE!!!---->");
+							console.log(move);
+							console.log(rect);
+							console.log(move.transform);
+							console.log(svg);
+							console.log(p);
+							console.log(transformList);
+							console.log("<--------");
 						}
 						
 					});

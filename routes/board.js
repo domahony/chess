@@ -17,31 +17,36 @@ function createWritePipe() {
 }
 
 function createReadFn(key) {
-				DISPATCH[key] = {lastmove: []};
-				console.log("Creating ReadFN for " + key);
-				return function(buf) {
-					console.log("Calling ReadFN Dispatch");
-					if (DISPATCH[key] != null && DISPATCH[key].read != null) {
-						DISPATCH[key].read(buf);
-					} else {
-						console.log("Ignoring: " + buf.toString());
-					}
-			};
+	DISPATCH[key] = {lastmove: []};
+	console.log("Creating ReadFN for " + key);
+	return function(buf) {
+		console.log("Calling ReadFN Dispatch");
+		if (DISPATCH[key] != null && DISPATCH[key].read != null) {
+			DISPATCH[key].read(buf);
+		} else {
+			console.log("Ignoring: " + buf.toString());
+		}
+	};
 }
 
-function storeLastMove(key, buf) {
+function storeLastMove(key, buf, child0) {
 	if (DISPATCH[key].lastmove == null) {
 		DISPATCH[key].lastmove = [];
 	}
-	
+
 	console.log("Storing Last Move: " + buf.toString());
-	
+
 	var found = buf.toString().match(/My move is : (\S+)/);
-	
+
 	if (found != null) {
-			console.log("Storing: " + found[1]);
-			DISPATCH[key].lastmove.push(found[1]);
+		console.log("Storing: " + found[1]);
+		DISPATCH[key].lastmove.push(found[1]);
 	}
+
+	populate_move_cache(child0, key, function() {
+		DISPATCH[key].lastmovestatus = "Complete";
+		DISPATCH[key].lastmove = found[1]; 
+	});
 }
 
 function initialize(sess) {
@@ -78,21 +83,35 @@ function initialize(sess) {
 
 exports.show = function(req, res){
 	req.session.value = initialize(req.session);
-	res.render('board', { title: 'Chess' });
+	populate_move_cache(req.session.value.child0, req.session.key, function() {
+		res.render('board', { title: 'Chess' });
+	});
 };
 
 exports.moves = function(req, res) {
+	res.send(DISPATCH[req.session.key].moves);
+};
+
+exports.getmovestatus = function(req, res) {
+	res.send({
+		status: DISPATCH[req.session.key].lastmovestatus,
+		moves: DISPATCH[req.session.key].moves,
+		lastmove: DISPATCH[req.session.key].lastmove,
+	});
+};
 	
-	var writefd = fs.openSync(req.session.value.child0, "a");
+function populate_move_cache(child0, key, callback) {
+	var writefd = fs.openSync(child0, "a");
 	var write = fs.createWriteStream(null, {fd: writefd});
 	
 	var bufferList = [];
-	DISPATCH[req.session.key].read = function(buf) {
+	DISPATCH[key].read = function(buf) {
 				console.log(this.name);
     			console.log("calling blah: ->" + buf.toString() + "<-");
     			bufferList.push(buf);
     			if (buf.toString().indexOf("No") >= 0) {
-    				getMoves(bufferList, res);
+    				getMoves(bufferList, key);
+    				callback();
     			}
 	};
 	
@@ -106,10 +125,11 @@ exports.moves = function(req, res) {
     fs.close(writefd, function(err) {
     	console.log("Closing fd:" + writefd);
     });
-};
+    
+}
 
 function
-getMoves(bufferList, res) {
+getMoves(bufferList, key) {
 	
 		var moves = [];
 		var b = Buffer.concat(bufferList);
@@ -148,7 +168,7 @@ getMoves(bufferList, res) {
 		}
 	
 		console.log(moves);
-		res.send(moves);
+		DISPATCH[key].moves = moves;
 }
 
 exports.readmove = function(req, res)
@@ -175,6 +195,11 @@ exports.makemove = function(req, res) {
 	var writefd = fs.openSync(req.session.value.child0, "a");
 	var write = fs.createWriteStream(null, {fd: writefd});
 	
+	//return a response of pending 
+	//execute the move
+	//get the list of value moves
+	//store the response and the valid moves in the session 
+	
 	console.log(req.route.params.move);
 	
 	var bufferList = [];
@@ -183,9 +208,10 @@ exports.makemove = function(req, res) {
     			console.log("calling blah: ->" + buf.toString() + "<-");
     			bufferList.push(buf);
     			if (buf.toString().indexOf(req.route.params.move) >= 0) {
-    				res.send({status: "Accepted"});
+    				DISPATCH[req.session.key].lastmovestatus = "Pending";
+    				DISPATCH[req.session.key].moves = [];
     				DISPATCH[req.session.key].read = function(buf) {
-    					storeLastMove(req.session.key, buf);
+    					storeLastMove(req.session.key, buf, req.session.value.child0);
     				};
     			}
 	};
@@ -200,5 +226,7 @@ exports.makemove = function(req, res) {
     fs.close(writefd, function(err) {
     	console.log("Closing fd:" + writefd);
     });
+    
+   res.send({status: "Pending"});
     
 };

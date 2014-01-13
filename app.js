@@ -35,6 +35,7 @@ app.get('/board', board.show);
 app.get('/getmoves', board.moves);
 app.get('/makemove/:move', board.makemove);
 app.get('/readmove/:idx', board.readmove);
+app.get('/getmovestatus', board.getmovestatus);
 
 http.createServer(app).listen(app.get('port'), function(){
   console.log('Express server listening on port ' + app.get('port'));
