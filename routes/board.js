@@ -17,7 +17,7 @@ function createWritePipe() {
 }
 
 function createReadFn(key) {
-				DISPATCH[key] = {};
+				DISPATCH[key] = {lastmove: []};
 				console.log("Creating ReadFN for " + key);
 				return function(buf) {
 					console.log("Calling ReadFN Dispatch");
@@ -149,6 +149,25 @@ getMoves(bufferList, res) {
 	
 		console.log(moves);
 		res.send(moves);
+}
+
+exports.readmove = function(req, res)
+{
+	var idx = req.route.params.idx;
+	console.log("Reading move: " + idx);
+	
+	if (DISPATCH[req.session.key].lastmove.length >= idx) {
+		
+		res.send(
+			{
+				status: "COMPLETE",
+				move: DISPATCH[req.session.key].lastmove[idx-1],
+			}
+		);
+		
+	} else {
+		res.send({status: "PENDING"});
+	}
 }
 
 exports.makemove = function(req, res) {

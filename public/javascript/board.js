@@ -41,7 +41,10 @@ function getLocation(rect)
 	};
 }
 
-function pawnmove() {
+function pawnmove(svg) {
+	
+	var transform = svg.createSVGTransform();
+	
 	var loc = getLocation(this.rect);
 	
 	if (loc.rank == 1 || loc.rank == 8) {
@@ -62,21 +65,26 @@ function pawnmove() {
 		home = 7;
 	}
 	
+	transform.setTranslate(0, dir * 150);
+	
 	var f = loc.file;
 	var move = {
 			target: "rect" + f + (+loc.rank + dir),
 			id: f.toLowerCase() + (+loc.rank + dir),
 			piece: this.svgid,
+			transform: svg.createSVGTransformFromMatrix(transform.matrix),
 	};
 	
 	if (isValid(move.id)) {
 		ret.push(move);
 	}
 	
+	transform.setTranslate(0, 2 * dir * 150);
 	move = {
 			target: "rect" + f + (+loc.rank + dir + dir),
 			id: f.toLowerCase() + (+loc.rank + dir + dir),
 			piece: this.svgid,
+			transform: svg.createSVGTransformFromMatrix(transform.matrix),
 	};
 	if (isValid(move.id)) {
 		ret.push(move);
@@ -85,19 +93,31 @@ function pawnmove() {
 	var files = [];
 	var f = +FILE_MAP[loc.file] + 1;   
 	if (FILE_ARRAY[f] != null) {
-		files.push(FILE_ARRAY[f]);
+		files.push(
+				{ 
+					file: FILE_ARRAY[f],
+					x: 1,  
+				}
+		);
 	}
 	
 	f = +FILE_MAP[loc.file] - 1;   
 	if (FILE_ARRAY[f] != null) {
-		files.push(FILE_ARRAY[f]);
+		files.push(
+				{ 
+					file: FILE_ARRAY[f],
+					x: -1,  
+				}
+		);
 	}
 	
 	for (var i = 0; i < files.length; i++) {
+		transform.setTranslate(files[i].x * 150, dir * 150);
 		move = {
-			target: "rect" + files[i] + (+loc.rank + dir),
-			id: loc.file + "x" + files[i].toLowerCase() + (+loc.rank + dir),
+			target: "rect" + files[i].file + (+loc.rank + dir),
+			id: loc.file + "x" + files[i].file.toLowerCase() + (+loc.rank + dir),
 			piece: this.svgid,
+			transform: svg.createSVGTransformFromMatrix(transform.matrix),
 		};
 		if (isValid(move.id)) {
 			ret.push(move);
@@ -129,7 +149,7 @@ function selectRect(rect, wrapper, piece) {
 		unselectTargets(previous, GAME.targets);
 	}
 				
-	selectTargets(wrapper, piece.movefn());
+	selectTargets(wrapper, piece.movefn(wrapper.ownerSVGElement));
 	GAME.selected = wrapper;
 }			
 
@@ -203,14 +223,70 @@ function generateBoard()
 	}
 }
 
-function makemove(move, rect) {
+function readmove()
+{
+	$.get( "/readmove/" + GAME.move_idx, function( data ) {
+		
+		if (data.status == 'COMPLETE') {
+			
+		} else {
+			setTimeout(readmove, 60000);
+		}
+	});
+	
+}
+
+function makemove(move, r, svg) {
 	
 				return function() {
 					console.log(move);
-					var rect =  rect;	
+					var rect = r;
 					var piece = move.piece;
 					$.get( "/makemove/" + move.id, function( data ) {
-						console.log(data);
+						
+						if (data.status == "Accepted") {
+							// deselect targets
+							// deselect selected
+							// apply transform to piece
+							
+							var p = $("#" + move.piece, svg).get(0); 
+							
+							var transformList = p.transform.baseVal;
+							var t = transformList.consolidate();
+		  
+							/*
+							if (t == null) {
+								t = p.ownerSVGElement.createSVGTransform();
+							}
+		  
+		  					var transform = transformList.createSVGTransformFromMatrix(g.getCTM()
+				  				.translate((150 * x)/t.matrix.a,(-1 * 150 * y)/t.matrix.d));
+		  					console.log(transformList.numberOfItems);
+		  					*/
+		  
+							if (transformList.numberOfItems == 0) {
+								transformList.appendItem(move.transform);
+							} else {
+								transformList.replaceItem(move.transform, 0);
+							}
+		  
+							//e.rect = calculateCell(x, -1 * y, e.rect);
+							
+							console.log("MOVE!!!---->");
+							console.log(move);
+							console.log(rect);
+							console.log(move.transform);
+							console.log(svg);
+							console.log(p);
+							console.log(transformList);
+							console.log("<--------");
+							
+							$.get( "/getmoves", function( data ) {
+								VALID_MOVES = data;
+								readmove();
+							});
+						}
+						
 					});
 					
 				};
@@ -227,7 +303,7 @@ function selectTargets(wrapper, moves) {
 		for (var key in BOARD) {
 			
 			if (BOARD[key].rect == moves[i].target) {
-				BOARD[key].clickfn = makemove(moves[i], BOARD[key]);
+				BOARD[key].clickfn = makemove(moves[i], BOARD[key], wrapper.ownerSVGElement);
 			}	
 		}	
 		GAME.targets.push(move_wrapper);
@@ -264,6 +340,7 @@ function swapFN(obj, d)
 var GAME = {
 		turn: "WHITE",
 		selected: null,
+		move_idx: 1,
 };
 	
 function rotate(docE)
@@ -385,12 +462,7 @@ $(document).ready( function () {
 			
 			$("rect", data.documentElement).click(this, function(evt) {
 				console.log(this.id + " Clicked! " + this + " " + evt.target);
-				//WHITE.forEach(clickDispatch(this, data.documentElement));
-				//BLACK.forEach(clickDispatch(this, data.documentElement));
-				//BOARD.forEach(clickDispatch(this, data.documentElement));
 				BOARD.forEach(clickDispatch(this, data.documentElement));
-				
-			
 			});
 			
 		});
